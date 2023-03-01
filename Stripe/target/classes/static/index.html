@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Stripe Payment Form</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.7/tailwind.min.css">
+	<script src="https://js.stripe.com/v3/"></script>
+	<style>
+      #card-element {
+        border-radius: 0.25rem;
+        border: 1px solid rgba(0, 0, 0, 0.2);
+        padding: 1rem;
+      }
+    </style>
+</head>
+<body>
+<form id="payment-form">
+	<label>
+		Name
+		<input type="text" name="name" required>
+	</label>
+
+	<label>
+		Email
+		<input type="email" name="email" required>
+	</label>
+
+	<div id="card-element">
+		<!-- Stripe Elements Placeholder -->
+	</div>
+
+	<button type="submit">Pay</button>
+</form>
+
+<script>
+ const stripe = Stripe('pk_test_51MWqRxIxcd7KGrT5cpoAacalzkt4yKbxIPLNxfyfffbS7lOxGTCDiGVXzohUFRDdWEs1lH8AMY72Fg63Z6lM5P6K00QiKODldT');
+const elements = stripe.elements();
+const cardElement = elements.create('card');
+cardElement.mount('#card-element');
+
+const form = document.getElementById('payment-form');
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+
+  const { paymentMethod, error } = await stripe.createPaymentMethod({
+    type: 'card',
+    card: cardElement,
+    billing_details: {
+      name: event.target.name.value,
+      email: event.target.email.value
+    }
+  });
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  if (!paymentMethod) {
+    console.error('Error: Payment method not returned from Stripe');
+    return;
+  }
+
+  const { id } = paymentMethod;
+
+  try {
+    const response = await fetch('/payment/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        payment_method_id: id,
+        amount: 4000,
+        currency: 'usd',
+        description: 'Example payment'
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(error);
+    }
+
+    const { payment_intent_id, client_secret } = await response.json();
+    const result = await stripe.confirmCardPayment(client_secret, {
+      payment_method: id,
+      payment_intent_id: payment_intent_id
+    });
+
+    console.log(result);
+  } catch (error) {
+    console.error(error);
+  }
+});
+
+    </script>
+</body>
+</html>
